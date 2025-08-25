@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="A high-precision PWA for real-time text analysis.">
+    <meta name="theme-color" content="#333333">
+    <title>Exact Word Counter</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧮</text></svg>">
+    <style>
+        :root {
+            --background-color: #f8f9fa;
+            --card-background-color: #ffffff;
+            --text-color: #212529;
+            --primary-color: #007bff;
+            --border-color: #dee2e6;
+            --stat-label-color: #6c757d;
+            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background-color: var(--background-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 1rem;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+        }
+
+        .container {
+            background-color: var(--card-background-color);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            padding: 2rem;
+            width: 100%;
+            max-width: 800px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        header h1 {
+            text-align: center;
+            margin-top: 0;
+            margin-bottom: 2rem;
+        }
+
+        #text-input {
+            width: 100%;
+            height: 200px;
+            padding: 1rem;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            font-family: inherit;
+            font-size: 1rem;
+            resize: vertical;
+            margin-bottom: 1.5rem;
+        }
+
+        .controls-section {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .control-group fieldset {
+            border: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .control-group legend {
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .radio-group, .checkbox-group {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .radio-group input, .checkbox-group input {
+            margin-right: 0.5rem;
+        }
+
+        .stats-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1.5rem;
+            padding: 1.5rem;
+            border-top: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 2rem;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-value {
+            display: block;
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+
+        .stat-label {
+            color: var(--stat-label-color);
+        }
+
+        .frequency-section h2 {
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+
+        #frequency-list {
+            padding-left: 2rem;
+        }
+
+        #frequency-list li {
+            margin-bottom: 0.5rem;
+        }
+
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border-width: 0;
+        }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <header>
+            <h1>Exact Word Counter</h1>
+        </header>
+
+        <section class="input-section">
+            <label for="text-input" class="sr-only">Text Input</label>
+            <textarea id="text-input" placeholder="Start typing, or paste your text here..."></textarea>
+        </section>
+
+        <section class="controls-section">
+            <div class="control-group">
+                <fieldset>
+                    <legend>Mode</legend>
+                    <div class="radio-group">
+                        <input type="radio" id="smart-mode" name="mode" value="smart" checked>
+                        <label for="smart-mode">Smart Mode</label>
+                    </div>
+                    <div class="radio-group">
+                        <input type="radio" id="strict-mode" name="mode" value="strict">
+                        <label for="strict-mode">Strict Mode</label>
+                    </div>
+                </fieldset>
+            </div>
+            <div class="control-group">
+                <fieldset>
+                    <legend>Configuration</legend>
+                     <div class="checkbox-group">
+                        <input type="checkbox" id="count-numbers" checked>
+                        <label for="count-numbers">Count numbers</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="hyphenated-words" checked>
+                        <label for="hyphenated-words">Treat hyphenated terms as one word</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="show-reading-time" checked>
+                        <label for="show-reading-time">Show reading time</label>
+                    </div>
+                </fieldset>
+            </div>
+        </section>
+
+        <section class="stats-section">
+            <div class="stat-item">
+                <span class="stat-value" id="words-stat">0</span>
+                <span class="stat-label">Words</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value" id="chars-inc-spaces-stat">0</span>
+                <span class="stat-label">Characters (incl. spaces)</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value" id="chars-exc-spaces-stat">0</span>
+                <span class="stat-label">Characters (excl. spaces)</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value" id="sentences-stat">0</span>
+                <span class="stat-label">Sentences</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value" id="lines-stat">0</span>
+                <span class="stat-label">Lines</span>
+            </div>
+            <div class="stat-item" id="reading-time-item">
+                <span class="stat-value" id="reading-time-stat">&lt; 1 min read</span>
+                <span class="stat-label">Reading Time</span>
+            </div>
+        </section>
+
+        <section id="frequency-section" class="frequency-section" style="display: none;">
+            <h2>Top 10 Words</h2>
+            <ol id="frequency-list"></ol>
+        </section>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DOM Element References ---
+            const textInput = document.getElementById('text-input');
+
+            const smartModeRadio = document.getElementById('smart-mode');
+            const strictModeRadio = document.getElementById('strict-mode');
+
+            const countNumbersCheckbox = document.getElementById('count-numbers');
+            const hyphenatedWordsCheckbox = document.getElementById('hyphenated-words');
+            const showReadingTimeCheckbox = document.getElementById('show-reading-time');
+
+            const wordsStat = document.getElementById('words-stat');
+            const charsIncSpacesStat = document.getElementById('chars-inc-spaces-stat');
+            const charsExcSpacesStat = document.getElementById('chars-exc-spaces-stat');
+            const sentencesStat = document.getElementById('sentences-stat');
+            const linesStat = document.getElementById('lines-stat');
+            const readingTimeStat = document.getElementById('reading-time-stat');
+            const readingTimeItem = document.getElementById('reading-time-item');
+
+            const frequencySection = document.getElementById('frequency-section');
+            const frequencyList = document.getElementById('frequency-list');
+
+            // --- Constants ---
+            const WPM = 200;
+
+            // --- Main Update Function ---
+            const updateAllStats = () => {
+                const rawText = textInput.value;
+
+                // 1. Normalization
+                const normalizedText = normalizeText(rawText);
+
+                // 2. Configuration
+                const config = {
+                    mode: smartModeRadio.checked ? 'smart' : 'strict',
+                    countNumbers: countNumbersCheckbox.checked,
+                    hyphenatedAsOne: hyphenatedWordsCheckbox.checked,
+                    showReadingTime: showReadingTimeCheckbox.checked
+                };
+
+                // 3. Calculations
+                const words = countWords(normalizedText, config);
+                const wordCount = words.length;
+                const charCountIncSpaces = normalizedText.length;
+                const charCountExcSpaces = (normalizedText.match(/[^\s]/g) || []).length;
+                const sentenceCount = countSentences(normalizedText);
+                const lineCount = (normalizedText.match(/\n/g) || []).length + (normalizedText.length > 0 ? 1 : 0);
+                const readingTime = calculateReadingTime(wordCount);
+                const wordFrequency = getWordFrequency(words);
+
+                // 4. UI Updates
+                wordsStat.textContent = wordCount;
+                charsIncSpacesStat.textContent = charCountIncSpaces;
+                charsExcSpacesStat.textContent = charCountExcSpaces;
+                sentencesStat.textContent = sentenceCount;
+                linesStat.textContent = lineCount;
+
+                readingTimeItem.style.display = config.showReadingTime ? 'block' : 'none';
+                readingTimeStat.textContent = readingTime;
+
+                updateFrequencyList(wordFrequency);
+            };
+
+            // --- Helper Functions ---
+
+            function normalizeText(text) {
+                return text
+                    .replace(/\r\n/g, '\n') // CRLF to LF
+                    .replace(/\u00A0/g, ' ') // Non-breaking space to standard space
+                    .replace(/[\u200B-\u200D\uFEFF]/g, ''); // Strip zero-width characters
+            }
+
+            function countWords(text, config) {
+                if (text.trim() === '') return [];
+
+                let segments;
+
+                if (config.mode === 'smart') {
+                    // Smart Mode Logic
+                    if (typeof Intl.Segmenter === 'function') {
+                        const segmenter = new Intl.Segmenter(undefined, { granularity: 'word' });
+                        segments = Array.from(segmenter.segment(text))
+                                        .filter(s => s.isWordLike)
+                                        .map(s => s.segment);
+                    } else {
+                        // Fallback Regex for Smart Mode
+                        const regex = config.hyphenatedAsOne
+                            ? /[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)*/gu
+                            : /[\p{L}\p{N}]+/gu;
+                        segments = text.match(regex) || [];
+                    }
+                } else {
+                    // Strict Mode Logic
+                    segments = text.split(/\s+/).filter(Boolean);
+                }
+
+                // Post-processing based on configuration
+                let filteredWords = segments;
+
+                if (!config.countNumbers) {
+                    filteredWords = filteredWords.filter(word => !/^\d+$/.test(word));
+                }
+
+                // Emojis are never counted as words in Smart Mode
+                if (config.mode === 'smart') {
+                     const emojiRegex = /\p{Emoji}/u;
+                     filteredWords = filteredWords.filter(word => !emojiRegex.test(word));
+                }
+
+                // Handle hyphenated words in smart mode when Intl.Segmenter is used
+                // as it splits them by default.
+                if (config.mode === 'smart' && config.hyphenatedAsOne && typeof Intl.Segmenter === 'function') {
+                    const hyphenatedRegex = /[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)+/gu;
+                    const hyphenatedTerms = text.match(hyphenatedRegex) || [];
+                    if (hyphenatedTerms.length > 0) {
+                        const wordSet = new Set(filteredWords);
+                        hyphenatedTerms.forEach(term => {
+                            const parts = term.split('-');
+                            if (parts.every(p => wordSet.has(p))) {
+                                parts.forEach(p => wordSet.delete(p));
+                                wordSet.add(term);
+                            }
+                        });
+                        filteredWords = Array.from(wordSet);
+                    }
+                }
+
+
+                return filteredWords;
+            }
+
+            function countSentences(text) {
+                if (text.trim() === '') return 0;
+                // Matches sentence-ending punctuation, including CJK equivalents.
+                const sentenceEndRegex = /[.!?…。」！？]/g;
+                const matches = text.match(sentenceEndRegex);
+                return matches ? matches.length : (text.length > 0 ? 1 : 0);
+            }
+
+            function calculateReadingTime(wordCount) {
+                if (wordCount === 0) return '< 1 min read';
+                const minutes = Math.ceil(wordCount / WPM);
+                return minutes === 1 ? '1 min read' : `${minutes} min read`;
+            }
+
+            function getWordFrequency(words) {
+                const frequency = new Map();
+                words.forEach(word => {
+                    const lowerWord = word.toLowerCase();
+                    frequency.set(lowerWord, (frequency.get(lowerWord) || 0) + 1);
+                });
+
+                return Array.from(frequency.entries())
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 10);
+            }
+
+            function updateFrequencyList(frequencyData) {
+                if (frequencyData.length > 0) {
+                    frequencySection.style.display = 'block';
+                    frequencyList.innerHTML = '';
+                    frequencyData.forEach(([word, count]) => {
+                        const li = document.createElement('li');
+                        li.textContent = `${word} (${count})`;
+                        frequencyList.appendChild(li);
+                    });
+                } else {
+                    frequencySection.style.display = 'none';
+                }
+            }
+
+            // --- Event Listeners ---
+            textInput.addEventListener('input', updateAllStats);
+            textInput.addEventListener('paste', () => setTimeout(updateAllStats, 0));
+            [smartModeRadio, strictModeRadio, countNumbersCheckbox, hyphenatedWordsCheckbox, showReadingTimeCheckbox].forEach(el => {
+                el.addEventListener('change', updateAllStats);
+            });
+
+            // --- Initial Calculation ---
+            updateAllStats();
+
+            // --- PWA Service Worker Registration ---
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker.register('/service-worker.js')
+                        .then(registration => {
+                            console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                        })
+                        .catch(error => {
+                            console.log('ServiceWorker registration failed: ', error);
+                        });
+                });
+            }
+        });
+    </script>
+</body>
+</html>
