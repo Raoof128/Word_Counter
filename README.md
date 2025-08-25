@@ -6,8 +6,14 @@ A high-fidelity, client-side web application for precise text analysis in real-t
 
 1. Open `index.html` in your browser.
 2. Type or paste text into the text area.
-3. The statistics will update in real-time.
-4. You can change the counting mode and other options using the controls.
+3. The statistics will update in real-time and your text and preferences are saved for later visits.
+4. Use the controls to change counting mode, configuration, or switch to dark mode.
+5. Click **Copy Stats** to copy the current metrics to your clipboard.
+6. Click **Download Stats** to export metrics and top words as a JSON file.
+7. Click **Share Stats** to share your metrics using the Web Share API (falls back to copying).
+8. Click **Clear Text** to reset the editor and stats.
+
+The statistics include Flesch Reading Ease and grade-level scores to help evaluate text difficulty.
 
 ## Testing Checklist
 
