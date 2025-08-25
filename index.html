@@ -19,6 +19,15 @@
             --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         }
 
+        .dark-mode {
+            --background-color: #212529;
+            --card-background-color: #343a40;
+            --text-color: #f8f9fa;
+            --primary-color: #66b2ff;
+            --border-color: #495057;
+            --stat-label-color: #adb5bd;
+        }
+
         body {
             font-family: var(--font-family);
             background-color: var(--background-color);
@@ -29,6 +38,7 @@
             justify-content: center;
             align-items: flex-start;
             min-height: 100vh;
+            transition: background-color 0.3s, color 0.3s;
         }
 
         .container {
@@ -125,6 +135,29 @@
             margin-bottom: 0.5rem;
         }
 
+        .action-buttons {
+            text-align: center;
+            margin-bottom: 2rem;
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 0.5rem 1rem;
+            background-color: var(--primary-color);
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
         .sr-only {
             position: absolute;
             width: 1px;
@@ -180,6 +213,15 @@
                     </div>
                 </fieldset>
             </div>
+            <div class="control-group">
+                <fieldset>
+                    <legend>Appearance</legend>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="dark-mode-toggle">
+                        <label for="dark-mode-toggle">Dark mode</label>
+                    </div>
+                </fieldset>
+            </div>
         </section>
 
         <section class="stats-section">
@@ -207,7 +249,22 @@
                 <span class="stat-value" id="reading-time-stat">&lt; 1 min read</span>
                 <span class="stat-label">Reading Time</span>
             </div>
+            <div class="stat-item">
+                <span class="stat-value" id="flesch-stat">N/A</span>
+                <span class="stat-label">Flesch Reading Ease</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value" id="grade-level-stat">N/A</span>
+                <span class="stat-label">Grade Level</span>
+            </div>
         </section>
+
+        <div class="action-buttons">
+            <button id="copy-stats">Copy Stats</button>
+            <button id="download-stats">Download Stats</button>
+            <button id="share-stats">Share Stats</button>
+            <button id="clear-text">Clear Text</button>
+        </div>
 
         <section id="frequency-section" class="frequency-section" style="display: none;">
             <h2>Top 10 Words</h2>
@@ -226,6 +283,7 @@
             const countNumbersCheckbox = document.getElementById('count-numbers');
             const hyphenatedWordsCheckbox = document.getElementById('hyphenated-words');
             const showReadingTimeCheckbox = document.getElementById('show-reading-time');
+            const darkModeToggle = document.getElementById('dark-mode-toggle');
 
             const wordsStat = document.getElementById('words-stat');
             const charsIncSpacesStat = document.getElementById('chars-inc-spaces-stat');
@@ -234,12 +292,20 @@
             const linesStat = document.getElementById('lines-stat');
             const readingTimeStat = document.getElementById('reading-time-stat');
             const readingTimeItem = document.getElementById('reading-time-item');
+            const fleschStat = document.getElementById('flesch-stat');
+            const gradeLevelStat = document.getElementById('grade-level-stat');
 
             const frequencySection = document.getElementById('frequency-section');
             const frequencyList = document.getElementById('frequency-list');
+            const copyStatsBtn = document.getElementById('copy-stats');
+            const downloadStatsBtn = document.getElementById('download-stats');
+            const shareStatsBtn = document.getElementById('share-stats');
+            const clearTextBtn = document.getElementById('clear-text');
 
             // --- Constants ---
             const WPM = 200;
+            const CONFIG_KEY = 'settings';
+            let lastFrequency = [];
 
             // --- Main Update Function ---
             const updateAllStats = () => {
@@ -264,7 +330,15 @@
                 const sentenceCount = countSentences(normalizedText);
                 const lineCount = (normalizedText.match(/\n/g) || []).length + (normalizedText.length > 0 ? 1 : 0);
                 const readingTime = calculateReadingTime(wordCount);
+                const syllableCount = words.reduce((sum, w) => sum + countSyllables(w), 0);
+                const readingEase = (sentenceCount > 0 && wordCount > 0)
+                    ? calculateFleschReadingEase(wordCount, sentenceCount, syllableCount)
+                    : 'N/A';
+                const gradeLevel = (sentenceCount > 0 && wordCount > 0)
+                    ? calculateFleschKincaidGrade(wordCount, sentenceCount, syllableCount)
+                    : 'N/A';
                 const wordFrequency = getWordFrequency(words);
+                lastFrequency = wordFrequency;
 
                 // 4. UI Updates
                 wordsStat.textContent = wordCount;
@@ -275,11 +349,69 @@
 
                 readingTimeItem.style.display = config.showReadingTime ? 'block' : 'none';
                 readingTimeStat.textContent = readingTime;
+                fleschStat.textContent = readingEase;
+                gradeLevelStat.textContent = gradeLevel;
 
                 updateFrequencyList(wordFrequency);
             };
 
             // --- Helper Functions ---
+
+            const handleInput = () => {
+                localStorage.setItem('textInput', textInput.value);
+                updateAllStats();
+            };
+
+            function applyTheme(theme) {
+                document.body.classList.toggle('dark-mode', theme === 'dark');
+            }
+
+            function getStatsText() {
+                const stats = [
+                    `Words: ${wordsStat.textContent}`,
+                    `Characters (incl. spaces): ${charsIncSpacesStat.textContent}`,
+                    `Characters (excl. spaces): ${charsExcSpacesStat.textContent}`,
+                    `Sentences: ${sentencesStat.textContent}`,
+                    `Lines: ${linesStat.textContent}`,
+                    `Flesch Reading Ease: ${fleschStat.textContent}`,
+                    `Grade Level: ${gradeLevelStat.textContent}`
+                ];
+                if (readingTimeItem.style.display !== 'none') {
+                    stats.push(`Reading Time: ${readingTimeStat.textContent}`);
+                }
+                return stats.join('\n');
+            }
+
+            function saveConfig() {
+                const config = {
+                    mode: smartModeRadio.checked ? 'smart' : 'strict',
+                    countNumbers: countNumbersCheckbox.checked,
+                    hyphenatedAsOne: hyphenatedWordsCheckbox.checked,
+                    showReadingTime: showReadingTimeCheckbox.checked,
+                    theme: darkModeToggle.checked ? 'dark' : 'light'
+                };
+                localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+            }
+
+            function loadConfig() {
+                const saved = JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}');
+                if (saved.mode === 'strict') {
+                    strictModeRadio.checked = true;
+                } else if (saved.mode === 'smart') {
+                    smartModeRadio.checked = true;
+                }
+                if (typeof saved.countNumbers === 'boolean') countNumbersCheckbox.checked = saved.countNumbers;
+                if (typeof saved.hyphenatedAsOne === 'boolean') hyphenatedWordsCheckbox.checked = saved.hyphenatedAsOne;
+                if (typeof saved.showReadingTime === 'boolean') showReadingTimeCheckbox.checked = saved.showReadingTime;
+                if (saved.theme) {
+                    darkModeToggle.checked = saved.theme === 'dark';
+                    applyTheme(saved.theme);
+                } else {
+                    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                    darkModeToggle.checked = prefersDark;
+                    applyTheme(prefersDark ? 'dark' : 'light');
+                }
+            }
 
             function normalizeText(text) {
                 return text
@@ -373,6 +505,23 @@
                     .slice(0, 10);
             }
 
+            function countSyllables(word) {
+                const cleaned = word.toLowerCase().replace(/[^a-z]/g, '');
+                if (!cleaned) return 0;
+                const syllables = cleaned
+                    .replace(/e$/i, '')
+                    .match(/[aeiouy]+/g);
+                return syllables ? syllables.length : 1;
+            }
+
+            function calculateFleschReadingEase(words, sentences, syllables) {
+                return (206.835 - 1.015 * (words / sentences) - 84.6 * (syllables / words)).toFixed(1);
+            }
+
+            function calculateFleschKincaidGrade(words, sentences, syllables) {
+                return (0.39 * (words / sentences) + 11.8 * (syllables / words) - 15.59).toFixed(1);
+            }
+
             function updateFrequencyList(frequencyData) {
                 if (frequencyData.length > 0) {
                     frequencySection.style.display = 'block';
@@ -388,10 +537,77 @@
             }
 
             // --- Event Listeners ---
-            textInput.addEventListener('input', updateAllStats);
-            textInput.addEventListener('paste', () => setTimeout(updateAllStats, 0));
+            const savedText = localStorage.getItem('textInput');
+            if (savedText) {
+                textInput.value = savedText;
+            }
+
+            loadConfig();
+
+            textInput.addEventListener('input', handleInput);
+            textInput.addEventListener('paste', () => setTimeout(handleInput, 0));
             [smartModeRadio, strictModeRadio, countNumbersCheckbox, hyphenatedWordsCheckbox, showReadingTimeCheckbox].forEach(el => {
-                el.addEventListener('change', updateAllStats);
+                el.addEventListener('change', () => {
+                    saveConfig();
+                    updateAllStats();
+                });
+            });
+
+            darkModeToggle.addEventListener('change', () => {
+                applyTheme(darkModeToggle.checked ? 'dark' : 'light');
+                saveConfig();
+            });
+
+            copyStatsBtn.addEventListener('click', () => {
+                navigator.clipboard.writeText(getStatsText()).then(() => {
+                    copyStatsBtn.textContent = 'Copied!';
+                    setTimeout(() => (copyStatsBtn.textContent = 'Copy Stats'), 1500);
+                });
+            });
+
+            downloadStatsBtn.addEventListener('click', () => {
+                    const stats = {
+                        words: parseInt(wordsStat.textContent, 10),
+                        charactersInclSpaces: parseInt(charsIncSpacesStat.textContent, 10),
+                        charactersExclSpaces: parseInt(charsExcSpacesStat.textContent, 10),
+                        sentences: parseInt(sentencesStat.textContent, 10),
+                        lines: parseInt(linesStat.textContent, 10),
+                        fleschReadingEase: fleschStat.textContent,
+                        gradeLevel: gradeLevelStat.textContent,
+                        topWords: lastFrequency.map(([word, count]) => ({ word, count }))
+                    };
+                    if (readingTimeItem.style.display !== 'none') {
+                        stats.readingTime = readingTimeStat.textContent;
+                    }
+                const blob = new Blob([JSON.stringify(stats, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'word-stats.json';
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+
+            shareStatsBtn.addEventListener('click', async () => {
+                const text = getStatsText();
+                if (navigator.share) {
+                    try {
+                        await navigator.share({ text });
+                    } catch (err) {
+                        console.error('Share failed:', err);
+                    }
+                } else {
+                    await navigator.clipboard.writeText(text);
+                    shareStatsBtn.textContent = 'Copied!';
+                    setTimeout(() => (shareStatsBtn.textContent = 'Share Stats'), 1500);
+                }
+            });
+
+            clearTextBtn.addEventListener('click', () => {
+                textInput.value = '';
+                localStorage.removeItem('textInput');
+                updateAllStats();
+                textInput.focus();
             });
 
             // --- Initial Calculation ---
