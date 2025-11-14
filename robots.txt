@@ -1,0 +1,14 @@
+# robots.txt for Exact Word Counter
+
+# Allow all search engines
+User-agent: *
+Allow: /
+
+# Sitemap location (if you add one in the future)
+# Sitemap: https://yourdomain.com/sitemap.xml
+
+# Disallow crawling of service worker cache
+Disallow: /service-worker.js
+
+# Note: This is a static PWA with minimal pages
+# All content is in index.html
