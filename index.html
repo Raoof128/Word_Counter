@@ -5,9 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="A high-precision PWA for real-time text analysis.">
     <meta name="theme-color" content="#333333">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Word Counter">
     <title>Exact Word Counter</title>
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧮</text></svg>">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧮</text></svg>">
     <style>
         :root {
             --background-color: #f8f9fa;
@@ -16,7 +20,12 @@
             --primary-color: #007bff;
             --border-color: #dee2e6;
             --stat-label-color: #6c757d;
+            --focus-color: #0056b3;
             --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
         }
 
         body {
@@ -57,6 +66,19 @@
             font-size: 1rem;
             resize: vertical;
             margin-bottom: 1.5rem;
+            transition: border-color 0.2s ease;
+        }
+
+        #text-input:focus {
+            outline: none;
+            border-color: var(--focus-color);
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+        }
+
+        input[type="radio"]:focus,
+        input[type="checkbox"]:focus {
+            outline: 2px solid var(--focus-color);
+            outline-offset: 2px;
         }
 
         .controls-section {
@@ -136,6 +158,37 @@
             white-space: nowrap;
             border-width: 0;
         }
+
+        /* Responsive improvements */
+        @media (max-width: 600px) {
+            body {
+                padding: 0.5rem;
+            }
+
+            .container {
+                padding: 1rem;
+            }
+
+            header h1 {
+                font-size: 1.5rem;
+                margin-bottom: 1rem;
+            }
+
+            .stats-section {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 1rem;
+                padding: 1rem;
+            }
+
+            .stat-value {
+                font-size: 1.5rem;
+            }
+
+            .controls-section {
+                flex-direction: column;
+                gap: 1rem;
+            }
+        }
     </style>
 </head>
 <body>
@@ -181,6 +234,8 @@
                 </fieldset>
             </div>
         </section>
+
+        <div class="sr-only" aria-live="polite" aria-atomic="true" id="stats-announcement"></div>
 
         <section class="stats-section">
             <div class="stat-item">
@@ -237,9 +292,11 @@
 
             const frequencySection = document.getElementById('frequency-section');
             const frequencyList = document.getElementById('frequency-list');
+            const statsAnnouncement = document.getElementById('stats-announcement');
 
             // --- Constants ---
             const WPM = 200;
+            let announcementTimeout;
 
             // --- Main Update Function ---
             const updateAllStats = () => {
@@ -262,7 +319,7 @@
                 const charCountIncSpaces = normalizedText.length;
                 const charCountExcSpaces = (normalizedText.match(/[^\s]/g) || []).length;
                 const sentenceCount = countSentences(normalizedText);
-                const lineCount = (normalizedText.match(/\n/g) || []).length + (normalizedText.length > 0 ? 1 : 0);
+                const lineCount = countLines(normalizedText);
                 const readingTime = calculateReadingTime(wordCount);
                 const wordFrequency = getWordFrequency(words);
 
@@ -277,6 +334,7 @@
                 readingTimeStat.textContent = readingTime;
 
                 updateFrequencyList(wordFrequency);
+                announceStatsToScreenReader(wordCount, sentenceCount);
             };
 
             // --- Helper Functions ---
@@ -355,6 +413,12 @@
                 return matches ? matches.length : (text.length > 0 ? 1 : 0);
             }
 
+            function countLines(text) {
+                if (text.length === 0) return 0;
+                const newlineCount = (text.match(/\n/g) || []).length;
+                return newlineCount + 1;
+            }
+
             function calculateReadingTime(wordCount) {
                 if (wordCount === 0) return '< 1 min read';
                 const minutes = Math.ceil(wordCount / WPM);
@@ -387,6 +451,20 @@
                 }
             }
 
+            function announceStatsToScreenReader(wordCount, sentenceCount) {
+                // Debounce announcements to avoid overwhelming screen readers
+                clearTimeout(announcementTimeout);
+                announcementTimeout = setTimeout(() => {
+                    if (wordCount > 0) {
+                        const wordPlural = wordCount === 1 ? 'word' : 'words';
+                        const sentencePlural = sentenceCount === 1 ? 'sentence' : 'sentences';
+                        statsAnnouncement.textContent = `${wordCount} ${wordPlural}, ${sentenceCount} ${sentencePlural}`;
+                    } else {
+                        statsAnnouncement.textContent = '';
+                    }
+                }, 1000); // Wait 1 second after typing stops
+            }
+
             // --- Event Listeners ---
             textInput.addEventListener('input', updateAllStats);
             textInput.addEventListener('paste', () => setTimeout(updateAllStats, 0));
@@ -400,12 +478,24 @@
             // --- PWA Service Worker Registration ---
             if ('serviceWorker' in navigator) {
                 window.addEventListener('load', () => {
-                    navigator.serviceWorker.register('/service-worker.js')
+                    navigator.serviceWorker.register('./service-worker.js')
                         .then(registration => {
-                            console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                            console.log('ServiceWorker registration successful with scope:', registration.scope);
+
+                            // Check for updates
+                            registration.addEventListener('updatefound', () => {
+                                const newWorker = registration.installing;
+                                if (newWorker) {
+                                    newWorker.addEventListener('statechange', () => {
+                                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                            console.log('New content available; please refresh.');
+                                        }
+                                    });
+                                }
+                            });
                         })
                         .catch(error => {
-                            console.log('ServiceWorker registration failed: ', error);
+                            console.error('ServiceWorker registration failed:', error);
                         });
                 });
             }
